@@ -156,6 +156,11 @@ def tyre_life(Laps_WC):
         lambda x: x - x.min() + 1  # TyreLife = laps since first use of this compound
     )
 
+def time_since_last_weather(df):
+    df["TimeSinceLastWeatherMeasurement"] = pd.to_timedelta(df["Time_x"]) - pd.to_timedelta(df["TimeStamp_y"])
+
+    return df
+
 def make(All_Laps):
     for location in past_races['Location']:
             if location in tyre_for_each_race['c345']:
@@ -209,19 +214,6 @@ def make(All_Laps):
 def csv(All_Laps):
     All_Laps.to_csv('All_Laps.csv', index=False)
 
-def driver_and_teams_to_int(df):
-    # Create mappings from categories to integer indices
-    driver_to_idx = {driver: idx for idx, driver in enumerate(df['Driver'].unique())}
-    team_to_idx = {team: idx for idx, team in enumerate(df['Team'].unique())}
-
-    # Convert to indices
-    df['Driver_idx'] = df['Driver'].map(driver_to_idx)
-    df['Team_idx'] = df['Team'].map(team_to_idx)
-
-    df = df.drop(['Driver', 'Team'], axis=1)
-
-    return df
-
 def one_hot_track_status(df):
     one_hot = pd.get_dummies(
     df['TrackStatus'], 
@@ -233,7 +225,7 @@ def one_hot_track_status(df):
      
 # Get unique race names and shuffle
 def train_val_test():
-    All_Laps = pd.read_csv('All_Laps_encoded_status.csv')
+    All_Laps = pd.read_csv('All_Laps1.csv')
     all_races = All_Laps['Name'].unique()
     np.random.shuffle(all_races)  # Randomize to avoid season bias
 
@@ -293,7 +285,6 @@ def driver_and_teams_to_int(df):
     df = df.drop(['Driver', 'Team'], axis=1)
 
     return df
-
 
 
 
