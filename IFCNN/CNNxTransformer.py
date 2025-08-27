@@ -2,7 +2,7 @@ import pandas as pd
 import torch.nn as nn
 from torchvision import models
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
-from CNN import TrackCNN
+from IFCNN.CNN import TrackCNN
 
 class Model(nn.Module):
     def __init__(self, num_tab, num_aux, num_classes=1,

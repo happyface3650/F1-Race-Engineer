@@ -84,7 +84,8 @@ def hardness_mapping( a, b, c):
 def encode_tyre_compound(Laps_WC, compound,hardness_map):
     Laps_WC[compound] = Laps_WC['Compound'].map(hardness_map)
     Laps_WC[compound] = Laps_WC[compound].fillna(0)
-     
+
+
 def merge_weather(weather, Laps):
             weather['Minute'] = pd.to_timedelta(weather['Time']).dt.components['minutes']
             hourly_weather = weather[((weather['Minute'].isin([0])))].drop('Minute', axis=1)
@@ -285,6 +286,10 @@ def driver_and_teams_to_int(df):
     df = df.drop(['Driver', 'Team'], axis=1)
 
     return df
+
+train_val_test()
+
+
 
 
 

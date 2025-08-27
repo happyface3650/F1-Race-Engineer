@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
-from CNN import TrackCNN
+from IFCNN.CNN import TrackCNN
 import torch
 from torch import nn
 from dataset import ImageTabularDataset
 import torch.nn.functional as F
 from torchvision import transforms
-data = ImageTabularDataset( 'All_Laps_Train.csv', 'track_images\\png\\train\\tracks', 256, True)
+data = ImageTabularDataset( 'track_images\\png\\train\\tracks', 'All_Laps_Train.csv', 256, True)
 
 image, tabular, aux, target1, target2 = data[1]
 
