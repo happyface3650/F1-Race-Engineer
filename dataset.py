@@ -25,12 +25,13 @@ class ImageTabularDataset(Dataset):
         self.df['PitOutTime'].replace('NO_PIT', '00:00:00')).dt.total_seconds()
         self.df['TimeSinceLastWeatherMeasurement'] = pd.to_timedelta(self.df['TimeSinceLastWeatherMeasurement']).dt.total_seconds()
         self.df['Rainfall'] = self.df['Rainfall'].astype(int)
+        self.df['dnf'] = self.df['dnf'].astype(int)
 
         self.aux_columns = ['Rainfall', 
                             'status_1','status_2','status_4','status_6','status_12','status_14',
                             'status_16','status_21','status_24','status_26','status_41','status_67',
                             'status_71','status_124','status_126','status_167','status_671','status_712',
-                            'status_6712']
+                            'status_6712', 'dnf']
         
         
         if self.pit:
@@ -54,7 +55,8 @@ class ImageTabularDataset(Dataset):
                                                 'status_1','status_2','status_4','status_6','status_12','status_14',
                                                 'status_16','status_21','status_24','status_26','status_41','status_67',
                                                 'status_71','status_124','status_126','status_167','status_671','status_712',
-                                                'status_6712', 'Name', 'Driver', 'Team', 'LapStartTime', 'Time_x', 'TimeStamp_y', 'TrackStatus', 'Unnamed: 0.1', 'Unnamed: 0']]
+                                                'status_6712', 'Name', 'Driver', 'Team', 'LapStartTime', 'Time_x', 'TimeStamp_y', 'TrackStatus', 'Unnamed: 0.1', 'Unnamed: 0', 'NextPitOutTime'
+                                                , 'dnf']]
             self.pitstoptime= self.df['PitDuration'].to_numpy(dtype=np.float32)
 
             
@@ -78,7 +80,7 @@ class ImageTabularDataset(Dataset):
                                                 'status_16','status_21','status_24','status_26','status_41','status_67',
                                                 'status_71','status_124','status_126','status_167','status_671','status_712',
                                                 'status_6712', 'Name', 'Driver', 'Team', 'LapStartTime', 'Time_x', 'TimeStamp_y', 'TrackStatus', 
-                                                'LapTime_sec', 'Position', 'Unnamed: 0.1', 'Unnamed: 0']]
+                                                'LapTime_sec', 'Position', 'Unnamed: 0.1', 'Unnamed: 0', 'dnf']]
             self.lap_time = self.df['LapTime_sec'].to_numpy(dtype=np.float32)
             self.position= self.df['Position'].to_numpy(dtype=np.float32)
 
@@ -96,19 +98,23 @@ class ImageTabularDataset(Dataset):
         image_embedding = self.track_embeddings[track_name]
         image_tensor = torch.FloatTensor(image_embedding)
         tabular  = torch.FloatTensor(self.numerical_data[index: index+1])
-            
-        if self.use_aux:
-            aux = torch.FloatTensor(self.aux_data[index:index+1])
-        else: 
-            aux = torch.FloatTensor(self.aux_data[index:index+1])
-        if self.pit:
+        aux = torch.FloatTensor(self.aux_data[index:index+1])
+
+        if self.pit and self.use_aux:
             target = torch.tensor(self.pitstoptime[index])
             return image_tensor, tabular, aux, target
-        else:
+        elif self.use_aux:
             target1 = torch.tensor(self.lap_time[index])
             target2 = torch.tensor(self.position[index])
             return image_tensor, tabular, aux, target1, target2
+        elif self.pit:
+            target = torch.tensor(self.pitstoptime[index])
+            return image_tensor, tabular, target
+        else:
+            target1 = torch.tensor(self.lap_time[index])
+            target2 = torch.tensor(self.position[index])
+            return image_tensor, tabular, target1, target2
 
+# for inference: get image embedding from dict and convert to tensor, get table data from weather predictions, RL agent simulation
 
-data = ImageTabularDataset( 'track_images\\png', 'All_Laps_Train.csv', 256, True)
 

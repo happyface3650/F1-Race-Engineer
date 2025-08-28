@@ -162,6 +162,9 @@ def time_since_last_weather(df):
 
     return df
 
+def DNF(Laps_WC):
+    max_lap = Laps_WC['LapNumber'].max()
+    Laps_WC['dnf'] = Laps_WC.groupby('Driver')['LapNumber'].transform('max') < max_lap
 def make(All_Laps):
     for location in past_races['Location']:
             if location in tyre_for_each_race['c345']:
@@ -200,6 +203,7 @@ def make(All_Laps):
             gap_to_ahead(Laps_WC)
             gap_to_behind(Laps_WC)
             tyre_life(Laps_WC)
+            DNF(Laps_WC)
             #pd.set_option('display.max_rows', None)
             Laps_WC['PitInTime'] = Laps_WC['PitInTime'].fillna('NO_PIT')
             Laps_WC['PitOutTime'] = Laps_WC['PitOutTime'].fillna('NO_PIT')
@@ -210,10 +214,13 @@ def make(All_Laps):
                                     'IsAccurate', 'TimeStamp_x', 'TimeBin', 'Time_y', 'LapTime',
                                     'TotalTime', 'LeaderTime', 'NextDriverTime', 'PrevDriverTime', 
                                     'SpeedI1', 'SpeedI2', 'Compound'], axis=1)
+
+            
             All_Laps = pd.concat([All_Laps, Laps_WC], axis=0)
+    return All_Laps
 
 def csv(All_Laps):
-    All_Laps.to_csv('All_Laps.csv', index=False)
+    All_Laps.to_csv('All_Laps2.csv', index=False)
 
 def one_hot_track_status(df):
     one_hot = pd.get_dummies(
@@ -283,14 +290,12 @@ def driver_and_teams_to_int(df):
     df['Driver_idx'] = df['Driver'].map(driver_to_idx)
     df['Team_idx'] = df['Team'].map(team_to_idx)
 
-    df = df.drop(['Driver', 'Team'], axis=1)
-
     return df
 
-train_val_test()
 
+yipee = make(All_Laps)
 
-
+csv(yipee)
 
 
 '''

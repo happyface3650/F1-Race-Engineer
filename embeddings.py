@@ -36,8 +36,5 @@ def create_track_embeddings_dict(tracks_dir):
             track_embeddings[track_name] = embedding
     return track_embeddings
 
-track_embeddings = create_track_embeddings_dict('track_images\\png')
-
-data = ImageTabularDataset(track_embeddings, 'All_Laps1.csv')
 
 
