@@ -1,22 +1,16 @@
 import pandas as pd
 from torch.utils.data import Dataset
 import torch
-import os
-from PIL import Image
 import numpy as np
-from torchvision import transforms
-from torchvision.transforms.functional import resize
-import torch.nn.functional as F
 
 class ImageTabularDataset(Dataset):
-    def __init__(self, track_embeddings_dict, csv_path=None, target_size=224, use_aux=False, pitstoppred=False):
+    def __init__(self, track_embeddings_dict, csv_path, use_aux=False, pitstoppred=False):
         
         self.track_embeddings = track_embeddings_dict
-        self.target_size = target_size
         self.csv_path = csv_path
         self.pit = pitstoppred
         self.df = pd.read_csv(self.csv_path)
-        unique_tracks = self.df['Name'].unique()
+        self.use_aux = use_aux
 
         self._preprocess_data()
         
@@ -109,7 +103,7 @@ class ImageTabularDataset(Dataset):
             aux = torch.FloatTensor(self.aux_data[index:index+1])
         if self.pit:
             target = torch.tensor(self.pitstoptime[index])
-            return image, tabular, aux, target
+            return image_tensor, tabular, aux, target
         else:
             target1 = torch.tensor(self.lap_time[index])
             target2 = torch.tensor(self.position[index])
