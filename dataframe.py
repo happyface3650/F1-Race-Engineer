@@ -2,8 +2,6 @@ import fastf1
 from datetime import datetime
 import math
 import pandas as pd
-from PIL import Image
-import os
 import numpy as np
 
 circuit_data = pd.DataFrame({
@@ -293,15 +291,12 @@ def driver_and_teams_to_int(df):
     return df
 
 
-yipee = make(All_Laps)
 
-csv(yipee)
 
 
 '''
 - embedded encoding driver and team
 - one hot encoding for tyre compound
-- output: laptime, position
 '''
 
 
