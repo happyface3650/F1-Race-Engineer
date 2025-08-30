@@ -83,6 +83,7 @@ class ImageTabularDataset(Dataset):
                                                 'LapTime_sec', 'Position', 'Unnamed: 0.1', 'Unnamed: 0', 'dnf']]
             self.lap_time = self.df['LapTime_sec'].to_numpy(dtype=np.float32)
             self.position= self.df['Position'].to_numpy(dtype=np.float32)
+            self.dnf= self.df['dnf'].to_numpy(dtype=np.float32)
 
         # Convert to NumPy array (exclude 'Name' and other non-numeric columns)
         self.numerical_data = self.df[self.tabular_columns].to_numpy(dtype=np.float32)
@@ -106,14 +107,16 @@ class ImageTabularDataset(Dataset):
         elif self.use_aux:
             target1 = torch.tensor(self.lap_time[index])
             target2 = torch.tensor(self.position[index])
-            return image_tensor, tabular, aux, target1, target2
+            target3 = torch.tensor(self.dnf[index])
+            return image_tensor, tabular, aux, target1, target2, target3
         elif self.pit:
             target = torch.tensor(self.pitstoptime[index])
             return image_tensor, tabular, target
         else:
             target1 = torch.tensor(self.lap_time[index])
             target2 = torch.tensor(self.position[index])
-            return image_tensor, tabular, target1, target2
+            target3 = torch.tensor(self.dnf[index])
+            return image_tensor, tabular, target1, target2, target3
 
 # for inference: get image embedding from dict and convert to tensor, get table data from weather predictions, RL agent simulation
 

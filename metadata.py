@@ -52,3 +52,5 @@ team_metadata = pd.DataFrame({
 
 driver_metadata.to_csv('driver_metadata.csv', index=False)
 team_metadata.to_csv('team_metadata.csv', index=False)
+
+#add embedding layer in model
