@@ -78,3 +78,27 @@ class F1LapTimePredictor(nn.Module):
 
         return prediction
     
+
+
+'''
+Practical Recommendation: Start with Proxy Labeling
+For your project, follow this steps:
+
+Build the "Base Pace" model on non-behavioral features: lap_number, tyre_age, fuel_load, track_temp, compound.
+
+Calculate the residual for every lap in your dataset. residual = actual_lap_time - predicted_base_lap_time.
+
+Create a new feature, pace_delta, which is this residual. (A value of -0.5 means the driver was half a second faster than the base model expected for that context).
+
+Retrain your Transformer with all your original features plus this new pace_delta feature from the previous lap.
+
+Input for Lap N: [lap_number=N, tyre_age=N, ... , pace_delta_{N-1}]
+
+Target: lap_time_N
+
+This is incredibly powerful. You are now telling your model: "Given that the driver was pushing (or conserving) on the last lap, what is their likely lap time now?" This allows the model to understand the dynamic, stateful nature of tyre degradation and driver strategy.
+
+By using the lagged value, you avoid data leakage (using information from the future to predict the past) and you create a realistic simulation where the AI's decision to "push" on one lap affects the state of the world on the next lap. This is the foundation for a truly strategic AI.
+'''
+
+    
