@@ -10,7 +10,7 @@ class F1LapTimePredictor(nn.Module):
         super().__init__()
 
         self.driver_embedder = nn.Sequential(
-            nn.Linear(driver_metadata_dim, driver_embed_dim),
+            nn.Linear(driver_metadata_dim, 64),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(64, driver_embed_dim)
@@ -34,7 +34,7 @@ class F1LapTimePredictor(nn.Module):
             nn.Linear(num_numeric_features, 64),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(512, track_embed_proj_dim)
+            nn.Linear(64, 64)
         )
 
         total_dim = driver_embed_dim + team_embed_dim + track_embed_proj_dim + 64
@@ -58,7 +58,8 @@ class F1LapTimePredictor(nn.Module):
             nn.Linear(128, 1)
         )
 
-        self.pos_encoder = nn.Parameter(torch.randn(1,1, total_dim))
+        self.pos_encoder = nn.Parameter(torch.randn(1, 1, total_dim))
+    
     def forward(self, numeric_features, track_embedding, driver_metadata, team_metadata):
 
         driver_embedding = self.driver_embedder(driver_metadata)
