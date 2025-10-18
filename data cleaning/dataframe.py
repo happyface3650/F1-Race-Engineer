@@ -375,12 +375,11 @@ class MakeDataSet():
             self.driver_and_teams_to_int()
             
             self.DNF()
-            '''
+
             if self.pit:
                 self.have_pits()
             else:   
                 self.no_pits()
-            '''
             if self.base_pace:
                 self.clean_data_for_base_pace()
             
@@ -400,7 +399,7 @@ class MakeDataSet():
             self.All_Laps = pd.DataFrame()
         
         return self.All_Laps
-data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'base_pace.csv', False, True)
+data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'base_pace.csv', True, False)
 data_processor.create_dataset()
 data_processor.csv()
 
