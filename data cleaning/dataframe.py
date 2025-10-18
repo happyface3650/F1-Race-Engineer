@@ -1,5 +1,3 @@
-
-
 import fastf1
 from datetime import datetime
 import math
@@ -75,7 +73,7 @@ circuit_data = pd.DataFrame({
 current_datetime = datetime.utcnow()
 
 class MakeDataSet():
-    def __init__(self, tyres_for_each_race, circuit_data, current_datetime, csv_path, pit, basepace):
+    def __init__(self, tyres_for_each_race, circuit_data, current_datetime, csv_path, pit, base_pace):
         self.tyres_for_each_race = tyres_for_each_race
         self.circuit_data = circuit_data
         self.current_datetime = current_datetime
@@ -86,7 +84,7 @@ class MakeDataSet():
         self.inter_map = {'INTERMEDIATE': 1}
         self.All_Laps = pd.DataFrame()
         self.pit = pit
-        self.basepace = basepace
+        self.base_pace = base_pace
 
     def hardness_mapping(self, a, b, c):
         hardness_map = {
@@ -135,8 +133,8 @@ class MakeDataSet():
         self.All_Laps = pd.concat([self.All_Laps, duplicated_rows], axis=1)
 
     def fbfill_nas(self, col):
-        self.All_Laps[col].ffill(inplace=True)
-        self.All_Laps[col].bfill(inplace=True)
+        self.All_Laps[col] = self.All_Laps[col].ffill().bfill()
+        print(f"{self.All_Laps[col].isna().sum()} missing values in {col} after forward/backward fill")
 
     def total(self):
         self.All_Laps['TotalTime'] = self.All_Laps.groupby('Driver')['LapTime_sec'].cumsum() #cumulative sum of laptimes
@@ -178,6 +176,10 @@ class MakeDataSet():
         self.All_Laps['TrackStatus'], 
             prefix='status'
         )
+        # Remove any existing status columns to avoid duplicates
+        status_cols = [col for col in self.All_Laps.columns if col.startswith('status_')]
+        self.All_Laps = self.All_Laps.drop(columns=status_cols)
+        # Add the new one-hot encoded status columns
         self.All_Laps = pd.concat([self.All_Laps, one_hot.astype(int)], axis=1)
 
     def time_since_last_weather(self):
@@ -187,7 +189,7 @@ class MakeDataSet():
         self.All_Laps.to_csv(self.csv_path, index=False)
 
 # Get unique race names and shuffle
-    def train_val_test():
+    def train_val_test(self):
         All_Laps = pd.read_csv(self.csv_path)
         all_races = All_Laps['Name'].unique()
         np.random.shuffle(all_races)  # Randomize to avoid season bias
@@ -225,32 +227,33 @@ class MakeDataSet():
         self.All_Laps['Team_idx'] = self.All_Laps['Team'].map(team_to_idx)
 
     def clean_data_for_base_pace(self):
-        self.All_Laps = self.All_Laps[self.All_Laps['PitInTime'] == "NO_PIT"]
         self.All_Laps = self.All_Laps[self.All_Laps['GapToAhead'] >= 2]
         self.All_Laps = self.All_Laps[self.All_Laps['GapToBehind'] >= 2]
-        self.All_Laps = self.All_Laps[self.All_Laps['TrackStatus'] == 4]
+        self.All_Laps = self.All_Laps[self.All_Laps['dnf'] == 0]
+        self.All_Laps = self.All_Laps[self.All_Laps['PitDuration'] == 0.0]
+        # Only filter by status_4 if the column exists
+        if 'status_1' in self.All_Laps.columns:
+            self.All_Laps = self.All_Laps[self.All_Laps['status_1'] == 1]
+        self.All_Laps = self.All_Laps.drop(['PitDuration', 'SpeedFL', 'SpeedST'], axis=1)
 
     def no_pits(self):
         # Filter for laps where there were no pit stops (NaT values)
         self.All_Laps = self.All_Laps[self.All_Laps['PitInTime'].isna()]
-        self.All_Laps = self.All_Laps[self.All_Laps['PitOutTime'].isna()]
     
     def have_pits(self):
         # Filter for laps where there were pit stops (not NaT values)
         self.All_Laps = self.All_Laps[self.All_Laps['PitInTime'].notna()]
-        self.All_Laps = self.All_Laps[self.All_Laps['PitOutTime'].notna()]
 
     def DNF(self):
         max_lap = self.All_Laps['LapNumber'].max()
         self.All_Laps['dnf'] = self.All_Laps.groupby('Driver')['LapNumber'].transform('max') < max_lap
 
-    def pit_duration(self):
-        # Calculate pit durations without filtering the data
-        self.All_Laps['NextPitOutTime'] = self.All_Laps.groupby('Driver')['PitOutTime'].shift(-1)
-        # Compute duration only where PitInTime is not null
-        self.All_Laps['PitDuration'] = (
-            (self.All_Laps['NextPitOutTime'] - self.All_Laps['PitInTime'])
-        ).fillna(0)
+    def fill_laptimes_with_pit_duration(self):
+        """
+        Fill missing lap times by adding pit duration to normal lap time
+        """
+        pit_lap_mask = self.All_Laps['LapTime_sec'].isna() & self.All_Laps['PitDuration'].notna() & (self.All_Laps['PitDuration'] > 0)
+        self.All_Laps.loc[pit_lap_mask, 'LapTime_sec'] = self.All_Laps.loc[pit_lap_mask, 'LapTime_sec'].ffill().bfill() + self.All_Laps.loc[pit_lap_mask, 'PitDuration']
 
     def drop_cols(self):
         # Columns to drop after all processing
@@ -303,11 +306,17 @@ class MakeDataSet():
         # Only drop columns that actually exist in the dataframe
         existing_cols_to_drop = [col for col in cols_to_drop if col in self.All_Laps.columns]
         self.All_Laps = self.All_Laps.drop(existing_cols_to_drop, axis=1)
-
+    def pit_duration(self):
+        # Calculate pit durations without filtering the data
+        self.All_Laps['NextPitOutTime'] = self.All_Laps.groupby('Driver')['PitOutTime'].shift(-1)
+        # Compute duration only where PitInTime is not null
+        self.All_Laps['PitDuration'] = (
+            (self.All_Laps['NextPitOutTime'] - self.All_Laps['PitInTime'])
+        ).fillna(0)
     def convert_to_numbers(self):
-        self.All_Laps['TimeSinceLastWeatherMeasurement'] = pd.to_timedelta(self.All_Laps['TimeSinceLastWeatherMeasurement']).dt.total_seconds()
-        self.All_Laps['Rainfall'] = self.All_Laps['Rainfall'].astype(int)
-        self.All_Laps['dnf'] = self.All_Laps['dnf'].astype(int)
+        self.All_Laps.loc[:, 'TimeSinceLastWeatherMeasurement'] = pd.to_timedelta(self.All_Laps['TimeSinceLastWeatherMeasurement']).dt.total_seconds()
+        self.All_Laps.loc[:, 'Rainfall'] = self.All_Laps['Rainfall'].astype(int)
+        self.All_Laps.loc[:, 'dnf'] = self.All_Laps['dnf'].astype(int)
 
     def create_dataset(self):
         all_races_data = []  # List to accumulate data from all races
@@ -345,12 +354,16 @@ class MakeDataSet():
             self.encode_tyre_compound('Inter', self.inter_map)
                 
             self.All_Laps['LapTime_sec'] = self.All_Laps['LapTime'].dt.total_seconds()
-
+            
+            self.pit_duration()
+            self.All_Laps['PitDuration'] =  pd.to_timedelta(self.All_Laps ['PitDuration']).dt.total_seconds()
+            self.fill_laptimes_with_pit_duration()
             self.fbfill_nas('SpeedFL')
             self.fbfill_nas('SpeedST')
-            self.fbfill_nas('LapTime')
+
+            self.fbfill_nas('LapTime_sec')
                 
-            self.All_Laps = self.All_Laps.sort_values(['LapNumber', 'Position'])
+            self.All_Laps = self.All_Laps.sort_values(['LapNumber', 'Driver'])
             self.total()
             self.gap_to_lead()
             self.gap_to_ahead()
@@ -358,14 +371,18 @@ class MakeDataSet():
             self.tyre_life()
             self.one_hot_track_status()
             self.time_since_last_weather()
-            self.pit_duration()
+            
             self.driver_and_teams_to_int()
             
             self.DNF()
+            '''
             if self.pit:
                 self.have_pits()
             else:   
                 self.no_pits()
+            '''
+            if self.base_pace:
+                self.clean_data_for_base_pace()
             
             self.convert_to_numbers()
             self.drop_cols()
@@ -383,7 +400,7 @@ class MakeDataSet():
             self.All_Laps = pd.DataFrame()
         
         return self.All_Laps
-data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'All_Laps2.csv', False, False)
+data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'base_pace.csv', False, True)
 data_processor.create_dataset()
 data_processor.csv()
 
