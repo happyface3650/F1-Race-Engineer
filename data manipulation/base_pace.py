@@ -220,7 +220,7 @@ def label_modes_with_confidence(df, model, X, confidence_threshold=1.5, mae=0.31
 if __name__ == "__main__":
 
 
-    df1 = pd.read_csv('ALLLAPS.csv')
+    df1 = pd.read_csv('TEST.csv')
     df = pd.read_csv('BASEPACELAPS.csv')
     obj = BasePaceModel(df)
     obj.train()
@@ -230,5 +230,5 @@ if __name__ == "__main__":
 
     labeled_df = label_modes_with_confidence(obj1.df, obj.model, obj1.X, confidence_threshold=1.5, mae=obj.mae)
     labeled_df = labeled_df.drop(obj1.driver_embed_features + obj1.team_embed_features + ['predicted_base_pace', 'delta'], axis=1)
-    labeled_df.to_csv('labeled_ALL.csv', index=False)
-    print("Labeled laps saved to labeled_ALL.csv")
+    labeled_df.to_csv('labeled_TEST.csv', index=False)
+    print("Labeled laps saved to labeled_TEST.csv")

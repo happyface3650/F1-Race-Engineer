@@ -3,6 +3,8 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import joblib
+import os
 
 # Mapping from FastF1 location names to circuit_data names
 location_mapping = {
@@ -51,10 +53,10 @@ circuit_data = pd.DataFrame({
     'AverageAngleAbs'      : [216.48826392555523, 104.29061912054225, 89.05551872226904, 176.5787662838012, 85.05921720383002, 97.73264647184526, 96.86016529526317, 92.17177042065626, 80.46619041837172, 206.491918642282, 69.25595030609429, 83.35334581360956, 82.49930645037058, 100.01189241086918, 79.15591232751017, 90.24350869943476, 88.96085343584257, 107.3090988326499, 105.37917997627748, 97.04221228936298, 84.39904822399014, 107.92673960682204, 98.32126702370911, 74.68854478807737], #using absolute value of angles
     'AverageAngle': [-216.48826392555523, -58.73678219611126, -0.38805452678854174, -176.5787662838012, -6.794049069006466, -73.75106253395187, -32.77440998822381, 13.800079131391477, -16.00914472766793, -206.491918642282, 21.23424492222545, -4.988783677148164, 12.842773471410073, 16.089674092163328, 0.8365054834529914, 51.36152104590719, -23.597804580524446, -5.6658573384283315, -58.16669648878112, -58.946680967818814, 17.059245892889503, 9.372151834849562, -7.006878086293883, -12.815079854190804],
 })
-current_datetime = datetime(2025, 5, 1)
+current_datetime = datetime.now()
 
 class MakeDataSet():
-    def __init__(self, tyres_for_each_race, circuit_data, current_datetime, csv_path, pit, base_pace):
+    def __init__(self, tyres_for_each_race, circuit_data, current_datetime, csv_path, pit, base_pace, test):
         self.tyres_for_each_race = tyres_for_each_race
         self.circuit_data = circuit_data
         self.current_datetime = current_datetime
@@ -64,6 +66,7 @@ class MakeDataSet():
         self.All_Laps = pd.DataFrame()
         self.pit = pit
         self.base_pace = base_pace
+        self.test = test
 
     def hardness_mapping(self, a, b, c):
         hardness_map = {
@@ -370,6 +373,13 @@ class MakeDataSet():
         
         # 2. Pre-processing: Fill NaNs
         # Transformers cannot handle NaNs. We fill gaps and status flags with 0.
+        # Save pre-normalization LapTime stats so we can rescale predictions later
+        if 'LapTime_sec' in self.All_Laps.columns and not hasattr(self, 'lap_mean'):
+            self.lap_mean = self.All_Laps['LapTime_sec'].mean()
+            self.lap_std = self.All_Laps['LapTime_sec'].std()
+            # store scalers dict to be populated below
+            self.scalers = {}
+
         self.All_Laps = self.All_Laps.fillna(0)
 
         # 3. Apply Transformations
@@ -387,21 +397,43 @@ class MakeDataSet():
         if gaussian_to_process:
             ss_gauss = StandardScaler()
             self.All_Laps[gaussian_to_process] = ss_gauss.fit_transform(self.All_Laps[gaussian_to_process])
+            # persist the gaussian scaler so we can reuse for inference and save its LapTime params
+            self.scalers['gaussian'] = ss_gauss
+            if 'LapTime_sec' in gaussian_to_process:
+                idx = gaussian_to_process.index('LapTime_sec')
+                # mean_ and scale_ correspond to the fitted scaler
+                self.scalers['lap_mean_scaled'] = float(ss_gauss.mean_[idx])
+                self.scalers['lap_std_scaled'] = float(ss_gauss.scale_[idx])
 
         # C. Sequential features: Min-Max Scaling [0, 1]
         sequential_to_process = [c for c in sequential_cols if c in self.All_Laps.columns]
         if sequential_to_process:
             mm_scaler = MinMaxScaler()
             self.All_Laps[sequential_to_process] = mm_scaler.fit_transform(self.All_Laps[sequential_to_process])
+            self.scalers['minmax'] = mm_scaler
         
-        print("Normalization complete: Gaussian (StandardScaler), Skewed (Log+SS), Sequential (MinMax).")
+        # Save scalers to disk for later use (filename based on csv_path)
+        try:
+            # ensure lap_mean / lap_std included for inference
+            if hasattr(self, 'lap_mean') and hasattr(self, 'lap_std'):
+                self.scalers['lap_mean'] = float(self.lap_mean)
+                self.scalers['lap_std'] = float(self.lap_std)
+
+            scaler_path = os.path.splitext(self.csv_path)[0] + '_scalers.joblib'
+            joblib.dump(self.scalers, scaler_path)
+            print(f"Normalization complete. Saved scalers to {scaler_path}")
+        except Exception as e:
+            print(f"Normalization complete. Failed to save scalers: {e}")
 
     def subtract_pit_duration_from_laptime(self):
         self.All_Laps['LapTime_sec'] = self.All_Laps['LapTime_sec'] - self.All_Laps['PitDuration']
     def create_dataset(self):
         all_races_data = []  # List to accumulate data from all races
-        
-        for location in self.past_races['Location']:
+        if self.test:
+            locations = ['Silverstone', 'Monza', 'Monaco', 'Miami', 'Imola', 'Barcelona']
+        else:
+            locations = self.past_races['Location'].tolist()
+        for location in locations:
             # Map FastF1 location names to circuit_data names for tyre lookup
             mapped_location = location_mapping.get(location, location)
             
@@ -488,9 +520,9 @@ class MakeDataSet():
             self.All_Laps = pd.DataFrame()
         
         return self.All_Laps
-data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'ALLLAPS.csv', False, False)
+data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'TEST.csv', False, False, True)
 All_Laps = data_processor.create_dataset()
-All_Laps.to_csv('ALLLAPS.csv', index=False)
+All_Laps.to_csv('TEST.csv', index=False)
 
 #add function to use base pace model 
 #label
