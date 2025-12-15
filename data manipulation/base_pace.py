@@ -25,32 +25,33 @@ class BasePaceModel:
     def _generate_embeddings(self):
         # Create embedding dictionaries
         # Note: Set use_pca=False for better performance (MAE ~0.8) or use_pca=True with n_components for smaller model
-        self.track_embeddings_dict = create_track_embeddings_dict('track_images/png/', n_components=20, use_pca=True)
         self.driver_embeddings_dict = create_entity_embeddings(self.df, 'Driver_idx', embedding_dim=16)
         self.team_embeddings_dict = create_entity_embeddings(self.df, 'Team_idx', embedding_dim=16)
         
         # Add embeddings to dataframe
         self.df = add_embeddings_to_dataframe(
             self.df, 
-            self.track_embeddings_dict, 
             self.driver_embeddings_dict, 
             self.team_embeddings_dict
         )
     
     def _define_features(self):
         base_features = [
-            'LapNumber', 'TyreLife', 'Position', 'AirTemp', 'Humidity', 
-            'Pressure', 'Rainfall', 'TrackTemp', 'WindDirection', 'WindSpeed', 
-            'CircuitLength', 'Number of Laps', 'Slick', 'Wet', 'Inter', 
-            'GapToLeader', 'GapToAhead', 'GapToBehind', 'TimeSinceLastWeatherMeasurement'
+            'LapNumber', 'Compound', 'TyreLife', 'AirTemp', 'Humidity', 
+            'Pressure', 'Rainfall', 'TrackTemp', 'WindDirection', 'WindSpeed', 'Circuit_CircuitLength', 'Circuit_Number_of_Laps',
+            'Circuit_NumberOfTurns', 'Circuit_AverageAngleAbs',
+            'Circuit_AverageAngle',
+            'GapToLeader', 'GapToAhead', 'GapToBehind',
+            'status_1','status_12','status_124','status_21','status_24','status_4','status_41',
+            'TimeSinceLastWeatherMeasurement',
+            # Driver and Team indices
+            # Note: These are not used as features directly, but are needed for embedding lookup
         ]
         
-        # Get embedding feature column names (NOT the embedding dictionaries)
-        self.track_embed_features = [col for col in self.df.columns if col.startswith('track_embed_')]
         self.driver_embed_features = [col for col in self.df.columns if col.startswith('driver_embed_')]
         self.team_embed_features = [col for col in self.df.columns if col.startswith('team_embed_')]
 
-        self.features = base_features + self.track_embed_features + self.driver_embed_features + self.team_embed_features
+        self.features = base_features + self.driver_embed_features + self.team_embed_features
         self.X = self.df[self.features].copy()
         self.y = self.df[self.target].copy()
         
@@ -103,7 +104,6 @@ class BasePaceModel:
         # Add embeddings using the SAME embedding dictionaries from training
         df_prepared = add_embeddings_to_dataframe(
             df_prepared, 
-            self.track_embeddings_dict,
             self.driver_embeddings_dict,
             self.team_embeddings_dict
         )
@@ -136,18 +136,18 @@ class BasePaceModel:
         )
         
         self.model = lgb.LGBMRegressor(
-        n_estimators=3000,        # More iterations (was probably stopping early)
-        learning_rate=0.01,       # Keep slow
-        max_depth=20,             # Keep deep (this was working!)
-        num_leaves=50,            # Slightly more than 31
-        min_child_samples=10,     # Keep as is
-        subsample=0.85,           
-        colsample_bytree=0.8,     
-        reg_alpha=0.2,            # Light regularization
-        reg_lambda=0.2,           
-        random_state=random_state,
-        verbose=-1
-    )
+            n_estimators=2000,
+            learning_rate=0.03,
+            max_depth=5,
+            num_leaves=15,
+            min_child_samples=10,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=0.1,
+            random_state=42,
+            verbose=-1
+        )
         print("Training model...")
         self.model.fit(
             self.X_train, self.y_train,
@@ -168,12 +168,10 @@ class BasePaceModel:
         print("\nTop 10 Most Important Features:")
         print(feature_importance.head(10))
         
-        track_importance = feature_importance[feature_importance['feature'].str.contains('track_embed')]['importance'].sum()
         driver_importance = feature_importance[feature_importance['feature'].str.contains('driver_embed')]['importance'].sum()
         team_importance = feature_importance[feature_importance['feature'].str.contains('team_embed')]['importance'].sum()
         
         print(f"\nEmbedding Importance:")
-        print(f"  Track embeddings: {track_importance:.2f}")
         print(f"  Driver embeddings: {driver_importance:.2f}")
         print(f"  Team embeddings: {team_importance:.2f}")
         
@@ -194,7 +192,7 @@ def label_modes_with_confidence(df, model, X, confidence_threshold=1.5, mae=0.31
         raise ValueError("Model not found. Train a new model with .train() or load one with .load().")
     
     predicted_pace = model.predict(X)
-    delta = df[target].values - predicted_pace - df['PitDuration'].values
+    delta = df[target].values - predicted_pace
     
     threshold = confidence_threshold * mae
     conditions = [
@@ -222,8 +220,8 @@ def label_modes_with_confidence(df, model, X, confidence_threshold=1.5, mae=0.31
 if __name__ == "__main__":
 
 
-    df1 = pd.read_csv('EVERYTHING.csv')
-    df = pd.read_csv('base_pace.csv')
+    df1 = pd.read_csv('ALLLAPS.csv')
+    df = pd.read_csv('BASEPACELAPS.csv')
     obj = BasePaceModel(df)
     obj.train()
     obj.test()
@@ -231,7 +229,6 @@ if __name__ == "__main__":
     obj1 = BasePaceModel(df1)
 
     labeled_df = label_modes_with_confidence(obj1.df, obj.model, obj1.X, confidence_threshold=1.5, mae=obj.mae)
-    labeled_df = labeled_df.drop(obj1.driver_embed_features + obj1.team_embed_features + obj1.track_embed_features, axis=1)
+    labeled_df = labeled_df.drop(obj1.driver_embed_features + obj1.team_embed_features + ['predicted_base_pace', 'delta'], axis=1)
     labeled_df.to_csv('labeled_ALL.csv', index=False)
     print("Labeled laps saved to labeled_ALL.csv")
-

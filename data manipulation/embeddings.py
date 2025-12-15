@@ -4,40 +4,20 @@ from torchvision import models, transforms
 from PIL import Image
 import os
 import numpy as np
-from dataset import ImageTabularDataset
 from sklearn.decomposition import PCA
 import pandas as pd
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-def add_embeddings_to_dataframe(df, track_embeddings, driver_embeddings, team_embeddings):
+def add_embeddings_to_dataframe(df, driver_embeddings, team_embeddings):
     """
     Add track, driver, and team embeddings to the DataFrame.
     
     Args:
         df: DataFrame with race data
-        track_embeddings: Dict of track name to embedding
         driver_embeddings: Dict of driver name to embedding
         team_embeddings: Dict of team name to embedding
     """ 
     # Add track embeddings as features
-    
-    if 'Name' in df.columns:
-        track_embedding_features = []
-        for idx, row in df.iterrows():
-            track_name = row['Name']
-            if track_name in track_embeddings:
-                embedding = track_embeddings[track_name]
-                track_embedding_features.append(embedding)
-            else:
-                # Use zero embedding for unknown tracks
-                track_embedding_features.append(np.zeros(2048))
-        
-        # Add track embedding features to df
-        track_embedding_df = pd.DataFrame(track_embedding_features,
-        columns=[f'track_embed_{i}' for i in range(len(track_embedding_features[0]))],
-        index=df.index)
-        df = pd.concat([df, track_embedding_df], axis=1)
-        print(f"Added {len(track_embedding_df.columns)} track embedding features")
     
     # Add driver embeddings as features
     if 'Driver_idx' in df.columns:
@@ -167,8 +147,6 @@ def create_entity_embeddings(df, column_name, embedding_dim=16):
             entity_data['LapTime_sec'].median(),
             entity_data['LapTime_sec'].quantile(0.25),
             entity_data['LapTime_sec'].quantile(0.75),
-            entity_data['Position'].mean(),
-            entity_data['Position'].std(),
             entity_data['TyreLife'].mean(),
             len(entity_data),  # Number of laps
         ]

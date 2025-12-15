@@ -1,20 +1,8 @@
 import fastf1
 from datetime import datetime
-import math
 import pandas as pd
 import numpy as np
-'''
-        3 diff tyre compounds are picked each race  (soft med hard) are refering to diff coumpounds for each race
-
-        slicks: 1, 2, 3, 4, 5, 6
-
-        melbourne, saudi arabia, miami, austrian: 3, 4, 5
-        shanghai, silverstone: 2, 3, 4
-        suzuka, bahrain, spain: 1, 2, 3
-        imola, monaco, montreal: 4, 5, 6
-        belgian: 1, 3, 4 ???
-        
-'''
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 # Mapping from FastF1 location names to circuit_data names
 location_mapping = {
@@ -54,11 +42,6 @@ circuit_data = pd.DataFrame({
                            53, 51, 62, 56, 71,
                            71, 50, 57, 58
                            ],
-   
-    })
-
-'''
-    image data already has this but we can use thsi to test for better performance 
     'NumberOfTurns'     : [15, 27, 14, 18, 16, 
                            19, 19, 19, 14, 14, 
                            10, 18, 16, 19, 14,
@@ -66,11 +49,9 @@ circuit_data = pd.DataFrame({
                            15, 17, 16, 16],
 
     'AverageAngleAbs'      : [216.48826392555523, 104.29061912054225, 89.05551872226904, 176.5787662838012, 85.05921720383002, 97.73264647184526, 96.86016529526317, 92.17177042065626, 80.46619041837172, 206.491918642282, 69.25595030609429, 83.35334581360956, 82.49930645037058, 100.01189241086918, 79.15591232751017, 90.24350869943476, 88.96085343584257, 107.3090988326499, 105.37917997627748, 97.04221228936298, 84.39904822399014, 107.92673960682204, 98.32126702370911, 74.68854478807737], #using absolute value of angles
-    'StandardDeviationAbs' : [458.8321683105066, 201.21858500671442, 141.92319960989195, 378.75640168691336, 134.24976856539408, 199.24054987097637, 172.03360900844714, 136.68541610904137, 144.42911520242296, 442.8473776098799, 97.7800636367041, 135.11085264375768, 126.41269070362975, 147.02821846563003, 127.56801371284563, 104.98507600629529, 157.39691493147953, 174.90917801992327, 200.19981762095892, 191.06166466444748, 118.73844523747309, 161.6280596206068, 156.92287708079837, 129.32895027770468], #using absolute value of angles
     'AverageAngle': [-216.48826392555523, -58.73678219611126, -0.38805452678854174, -176.5787662838012, -6.794049069006466, -73.75106253395187, -32.77440998822381, 13.800079131391477, -16.00914472766793, -206.491918642282, 21.23424492222545, -4.988783677148164, 12.842773471410073, 16.089674092163328, 0.8365054834529914, 51.36152104590719, -23.597804580524446, -5.6658573384283315, -58.16669648878112, -58.946680967818814, 17.059245892889503, 9.372151834849562, -7.006878086293883, -12.815079854190804],
-    'StandardDeviation': [98.32428722681023, 113.52866227268522, 107.36221599361905, 106.76930335283502, 94.99215581583938, 93.03994190032616, 108.8890332818007, 110.45158206929294, 104.09763798932771, 111.52795445066761, 83.65778553357201, 99.95765261078193, 103.9454998793724, 119.09275344827954, 98.32511329440977, 96.74128551848803, 106.94636084950332, 130.84649536460861, 109.20147925529666, 103.20485191367843, 96.1263018168946, 125.71221087323826, 113.09805475271118, 92.51288612600074],
-'''
-current_datetime = datetime.utcnow()
+})
+current_datetime = datetime(2025, 5, 1)
 
 class MakeDataSet():
     def __init__(self, tyres_for_each_race, circuit_data, current_datetime, csv_path, pit, base_pace):
@@ -80,8 +61,6 @@ class MakeDataSet():
         self.csv_path = csv_path
         self.schedule = fastf1.get_event_schedule(current_datetime.year) #pd dataframe
         self.past_races = self.schedule[self.schedule['Session5DateUtc'] < current_datetime]
-        self.wet_map = {'WET': 1}
-        self.inter_map = {'INTERMEDIATE': 1}
         self.All_Laps = pd.DataFrame()
         self.pit = pit
         self.base_pace = base_pace
@@ -91,12 +70,14 @@ class MakeDataSet():
                     'HARD': a,
                     'MEDIUM': b,
                     'SOFT': c,
+                    'INTERMEDIATE':  7,
+                    'WET':  8,
                 }
         return hardness_map
 
     def encode_tyre_compound(self, compound, hardness_map):
         self.All_Laps[compound] = self.All_Laps['Compound'].map(hardness_map)
-        self.All_Laps[compound] = self.All_Laps[compound].fillna(0)
+        self.All_Laps[compound] = self.All_Laps[compound].ffill().bfill()
 
     def merge_weather(self, weather):
             weather['Minute'] = pd.to_timedelta(weather['Time']).dt.components['minutes']
@@ -127,10 +108,15 @@ class MakeDataSet():
         circuit_info = circuit_data.iloc[circuit_data_index]
 
         circuit_info = circuit_info.to_frame().T
+        # Prefix circuit columns to avoid name collisions and ensure they persist
+        circuit_info.columns = [f"Circuit_{c.replace(' ', '_')}" for c in circuit_info.columns]
 
         duplicated_rows = pd.concat([circuit_info]*len(self.All_Laps), ignore_index=True)
 
         self.All_Laps = pd.concat([self.All_Laps, duplicated_rows], axis=1)
+        # Debug: report which circuit columns were added
+        added = [c for c in self.All_Laps.columns if c.startswith('Circuit_')]
+        print(f"Added circuit columns for {mapped_location}: {added}")
 
     def fbfill_nas(self, col):
         self.All_Laps[col] = self.All_Laps[col].ffill().bfill()
@@ -148,12 +134,38 @@ class MakeDataSet():
         self.All_Laps['GapToLeader'] = self.All_Laps['TotalTime'] - self.All_Laps['LeaderTime'] #gap to leader
 
     def gap_to_ahead(self):
-        self.All_Laps['NextDriverTime'] = self.All_Laps.groupby('LapNumber')['TotalTime'].shift(1)  # Time of driver ahead
+        """
+        For each lap, sort drivers by TotalTime (ascending) and take the previous
+        row as the 'driver ahead' -> robust to unsorted index or missing rows.
+        """
+        df = self.All_Laps
+        # Rank drivers by time to ensure deterministic ordering
+        df['RankByTime'] = df.groupby('LapNumber')['TotalTime'].rank(method='first', ascending=True)
+        sorted_df = df.sort_values(['LapNumber', 'RankByTime'])
+        sorted_df['NextDriverTime'] = sorted_df.groupby('LapNumber')['TotalTime'].shift(1)
+        # Assign back using original index alignment
+        self.All_Laps['NextDriverTime'] = sorted_df['NextDriverTime']
         self.All_Laps['GapToAhead'] = self.All_Laps['TotalTime'] - self.All_Laps['NextDriverTime']
+        # Leader has no ahead
+        self.All_Laps.loc[self.All_Laps.groupby('LapNumber')['RankByTime'].transform('min') == self.All_Laps['RankByTime'], 'GapToAhead'] = 0
+        self.All_Laps.drop(columns=['RankByTime'], inplace=True, errors='ignore')
 
     def gap_to_behind(self):
-        self.All_Laps['PrevDriverTime'] = self.All_Laps.groupby('LapNumber')['TotalTime'].shift(-1)  # Time of driver behind
+        """
+        Symmetric of gap_to_ahead: sort by TotalTime then look at the next row for the 'driver behind'.
+        """
+        df = self.All_Laps
+        df['RankByTime'] = df.groupby('LapNumber')['TotalTime'].rank(method='first', ascending=True)
+        sorted_df = df.sort_values(['LapNumber', 'RankByTime'])
+        sorted_df['PrevDriverTime'] = sorted_df.groupby('LapNumber')['TotalTime'].shift(-1)
+        self.All_Laps['PrevDriverTime'] = sorted_df['PrevDriverTime']
         self.All_Laps['GapToBehind'] = self.All_Laps['PrevDriverTime'] - self.All_Laps['TotalTime']
+        # Last-placed driver has no behind
+        max_rank = self.All_Laps.groupby('LapNumber')['RankByTime'].transform('max')
+        self.All_Laps.loc[self.All_Laps['RankByTime'] == max_rank, 'GapToBehind'] = 0
+        self.All_Laps.drop(columns=['RankByTime'], inplace=True, errors='ignore')
+
+
 
     def handle_last_place(self):
         self.All_Laps.loc[self.All_Laps['Position'] == self.All_Laps.groupby('LapNumber')['Position'].transform('max'), 'GapToBehind'] = 0
@@ -245,15 +257,21 @@ class MakeDataSet():
         self.All_Laps = self.All_Laps[self.All_Laps['PitInTime'].notna()]
 
     def DNF(self):
-        max_lap = self.All_Laps['LapNumber'].max()
-        self.All_Laps['dnf'] = self.All_Laps.groupby('Driver')['LapNumber'].transform('max') < max_lap
+        """
+        Mark dnf only on the final lap row for drivers whose last lap is less
+        than the race's maximum lap. (Previously this flagged all laps for that driver.)
+        """
+        race_max_lap = self.All_Laps['LapNumber'].max()
+        driver_last_lap = self.All_Laps.groupby('Driver')['LapNumber'].transform('max')
+        dnf_last_lap_mask = (self.All_Laps['LapNumber'] == driver_last_lap) & (driver_last_lap < race_max_lap)
+        self.All_Laps['dnf'] = dnf_last_lap_mask.astype(int)
 
     def fill_laptimes_with_pit_duration(self):
         """
         Fill missing lap times by adding pit duration to normal lap time
         """
         pit_lap_mask = self.All_Laps['LapTime_sec'].isna() & self.All_Laps['PitDuration'].notna() & (self.All_Laps['PitDuration'] > 0)
-        self.All_Laps.loc[pit_lap_mask, 'LapTime_sec'] = self.All_Laps.loc[pit_lap_mask, 'LapTime_sec'].ffill().bfill() + self.All_Laps.loc[pit_lap_mask, 'PitDuration']
+        self.All_Laps.loc[pit_lap_mask, 'LapTime_sec'] = self.All_Laps.loc[pit_lap_mask, 'LapTime_sec'].ffill().bfill() 
 
     def drop_cols(self):
         # Columns to drop after all processing
@@ -280,11 +298,8 @@ class MakeDataSet():
             # Intermediate calculation columns
             'TotalTime', 'LeaderTime', 'NextDriverTime', 'PrevDriverTime',
             
-            # Speed trap columns (less important than SpeedFL/SpeedST)
-            'SpeedI1', 'SpeedI2',
-            
-            # Compound (encoded as Slick/Wet/Inter)
-            'Compound',
+            # Speed columns 
+            'SpeedI1', 'SpeedI2', 'SpeedFL', 'SpeedST',
             
             # Index columns
             'Unnamed: 0', 'Unnamed: 0.1',
@@ -296,12 +311,15 @@ class MakeDataSet():
             'IsPersonalBest', 'LapStartDate',
             
             # Original lap time (keeping LapTime_sec)
-            'LapTime',
+            'LapTime', 'Position', 
 
             'status_14', 'status_126', 'status_16', 'status_167', 'status_67', 
             'status_671', 'status_71', 'status_26', 'status_6', 'status_2', 
             'status_6712', 'status_712'
         ]
+
+        if not self.pit:
+            cols_to_drop.append('PitDuration')
         
         # Only drop columns that actually exist in the dataframe
         existing_cols_to_drop = [col for col in cols_to_drop if col in self.All_Laps.columns]
@@ -315,9 +333,71 @@ class MakeDataSet():
         ).fillna(0)
     def convert_to_numbers(self):
         self.All_Laps.loc[:, 'TimeSinceLastWeatherMeasurement'] = pd.to_timedelta(self.All_Laps['TimeSinceLastWeatherMeasurement']).dt.total_seconds()
-        self.All_Laps.loc[:, 'Rainfall'] = self.All_Laps['Rainfall'].astype(int)
+        self.All_Laps['Rainfall'] = (
+            self.All_Laps['Rainfall']
+            .fillna(False)
+            .astype(int)
+        )
         self.All_Laps.loc[:, 'dnf'] = self.All_Laps['dnf'].astype(int)
 
+    def normalize(self):
+        """
+        Normalizes columns using a mixed strategy optimized for Transformers.
+        - Gaussian-like: StandardScaler
+        - Skewed: Log1p + StandardScaler
+        - Sequential: Min-Max
+        - Binary/Flags: Filled with 0
+        - Categorical: Excluded (to be handled via Embeddings)
+        """
+        
+        # 1. Define Column Groups
+        # Gaussian-like continuous features
+        gaussian_cols = [
+            'AirTemp', 'Humidity', 'Pressure', 'TrackTemp', 'WindDirection', 
+            'WindSpeed', 'TimeSinceLastWeatherMeasurement', 'CircuitLength', 
+            'Number of Laps', 'LapTime_sec', 'Circuit_CircuitLength', 'Circuit_Number_of_Laps',
+            'Circuit_NumberOfTurns', 'Circuit_AverageAngleAbs', 'Circuit_AverageAngle'
+        ]
+        
+        # Skewed features (Gaps often follow a power-law distribution)
+        skewed_cols = ['GapToLeader', 'GapToAhead', 'GapToBehind']
+        
+        # Sequential/Counter features
+        sequential_cols = ['LapNumber', 'TyreLife']
+        
+        # Dynamic list of status flags
+        status_cols = [col for col in self.All_Laps.columns if col.startswith('status_')]
+        
+        # 2. Pre-processing: Fill NaNs
+        # Transformers cannot handle NaNs. We fill gaps and status flags with 0.
+        self.All_Laps = self.All_Laps.fillna(0)
+
+        # 3. Apply Transformations
+        
+        # A. Skewed Gaps: Log Transform then Standardize
+        # np.log1p handles 0 values safely as log(1 + x)
+        for col in skewed_cols:
+            if col in self.All_Laps.columns:
+                self.All_Laps[col] = np.log1p(self.All_Laps[col])
+                ss_skew = StandardScaler()
+                self.All_Laps[[col]] = ss_skew.fit_transform(self.All_Laps[[col]])
+
+        # B. Gaussian features: Standardization (Mean=0, Std=1)
+        gaussian_to_process = [c for c in gaussian_cols if c in self.All_Laps.columns]
+        if gaussian_to_process:
+            ss_gauss = StandardScaler()
+            self.All_Laps[gaussian_to_process] = ss_gauss.fit_transform(self.All_Laps[gaussian_to_process])
+
+        # C. Sequential features: Min-Max Scaling [0, 1]
+        sequential_to_process = [c for c in sequential_cols if c in self.All_Laps.columns]
+        if sequential_to_process:
+            mm_scaler = MinMaxScaler()
+            self.All_Laps[sequential_to_process] = mm_scaler.fit_transform(self.All_Laps[sequential_to_process])
+        
+        print("Normalization complete: Gaussian (StandardScaler), Skewed (Log+SS), Sequential (MinMax).")
+
+    def subtract_pit_duration_from_laptime(self):
+        self.All_Laps['LapTime_sec'] = self.All_Laps['LapTime_sec'] - self.All_Laps['PitDuration']
     def create_dataset(self):
         all_races_data = []  # List to accumulate data from all races
         
@@ -347,27 +427,33 @@ class MakeDataSet():
             self.merge_weather(weather)
             self.merge_circuit(location)
                     
-            self.All_Laps = self.All_Laps.sort_values(['DriverNumber', 'LapNumber'])
+            self.All_Laps = self.All_Laps.sort_values(['Driver', 'LapNumber'])
 
-            self.encode_tyre_compound('Slick', hardness_map)
-            self.encode_tyre_compound('Wet', self.wet_map)
-            self.encode_tyre_compound('Inter', self.inter_map)
-                
-            self.All_Laps['LapTime_sec'] = self.All_Laps['LapTime'].dt.total_seconds()
+            self.encode_tyre_compound('Compound', hardness_map)
             
+            self.All_Laps['LapTime_sec'] = self.All_Laps['LapTime'].dt.total_seconds()
             self.pit_duration()
-            self.All_Laps['PitDuration'] =  pd.to_timedelta(self.All_Laps ['PitDuration']).dt.total_seconds()
+            self.All_Laps['PitDuration'] = pd.to_timedelta(self.All_Laps['PitDuration']).dt.total_seconds()
             self.fill_laptimes_with_pit_duration()
-            self.fbfill_nas('SpeedFL')
-            self.fbfill_nas('SpeedST')
 
             self.fbfill_nas('LapTime_sec')
-                
-            self.All_Laps = self.All_Laps.sort_values(['LapNumber', 'Driver'])
+            
+            self.All_Laps = self.All_Laps.sort_values(['Driver', 'LapNumber'])
             self.total()
             self.gap_to_lead()
             self.gap_to_ahead()
             self.gap_to_behind()
+            self.handle_last_place()
+            gap_cols = ['GapToLeader', 'GapToAhead', 'GapToBehind']
+
+            self.All_Laps[gap_cols] = (
+                self.All_Laps
+                .sort_values(['Driver', 'LapNumber'])
+                .groupby('Driver')[gap_cols]
+                .shift(1)
+            )
+            self.All_Laps[gap_cols] = self.All_Laps[gap_cols].fillna(0.0)
+            
             self.tyre_life()
             self.one_hot_track_status()
             self.time_since_last_weather()
@@ -375,9 +461,10 @@ class MakeDataSet():
             self.driver_and_teams_to_int()
             
             self.DNF()
-
+            
             if self.pit:
                 self.have_pits()
+                self.subtract_pit_duration_from_laptime()
             else:   
                 self.no_pits()
             if self.base_pace:
@@ -386,6 +473,7 @@ class MakeDataSet():
             self.convert_to_numbers()
             self.drop_cols()
             
+            
             # Add processed race data to the list
             all_races_data.append(self.All_Laps.copy())
             print(f"Processed {location} - {len(self.All_Laps)} laps")
@@ -393,19 +481,24 @@ class MakeDataSet():
         # Combine all race data
         if all_races_data:
             self.All_Laps = pd.concat(all_races_data, ignore_index=True)
+            self.normalize()
             print(f"Total dataset created with {len(self.All_Laps)} laps from {len(all_races_data)} races")
         else:
             print("No race data was processed successfully")
             self.All_Laps = pd.DataFrame()
         
         return self.All_Laps
-data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'base_pace.csv', True, False)
-data_processor.create_dataset()
-data_processor.csv()
+data_processor = MakeDataSet(tyre_for_each_race, circuit_data, current_datetime, 'ALLLAPS.csv', False, False)
+All_Laps = data_processor.create_dataset()
+All_Laps.to_csv('ALLLAPS.csv', index=False)
 
+#add function to use base pace model 
+#label
+#remove base_pace and delta
+#subtract pit duration from laptime
+#spit train val test
 
-
-
+'''
 
 
 def circuit_info(race):
@@ -427,7 +520,7 @@ def circuit_info(race):
         
         std_deviation = math.sqrt(std_sum/(count-1))
         std.append(std_deviation)
-'''
+
 - embedded encoding driver and team
 - one hot encoding for tyre compound
 '''
