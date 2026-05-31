@@ -13,11 +13,10 @@ This project simulates the role of an F1 race engineer by predicting lap times i
 
 ## 🏆 Performance
 
-- **RMSE**: 0.90 seconds
-- **MAE**: 0.64 seconds
-- **Median Error**: 0.48 seconds
-- **92.6%** of predictions within 1 second
-- **96.7%** of predictions within 2 seconds
+- **RMSE**: 0.3108 seconds
+- **MAE**: 0.1958 seconds
+- **Median Error**: 0.1115 seconds
+- **98.8%** of predictions within 1 second
 
 ## 🏗️ Architecture
 
