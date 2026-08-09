@@ -12,25 +12,10 @@ This project simulates the role of an F1 race engineer by predicting lap times i
 - **Driver & Team**: Historical performance patterns via embeddings
 
 ## 🏆 Performance
-
-- **RMSE**: 0.3108 seconds
-- **MAE**: 0.1958 seconds
-- **Median Error**: 0.1115 seconds
-- **98.8%** of predictions within 1 second
+- **MAE**: 5 seconds
 
 ## 🏗️ Architecture
-
-### Model: Stint Transformer
-- **Input**: Sequential lap data organized by racing stints
-- **Embeddings**: Driver, Team, Tyre Compound, Race Mode
-- **Encoder**: Multi-head self-attention with positional encoding
-- **Output**: Lap time prediction (seconds)
-
-### Key Features
-- Handles variable-length stints via padding and masking
-- Captures temporal dependencies across laps
-- Learns driver-specific and team-specific patterns
-- Properly lags gap features to prevent data leakage
+- **Transformer/GRU/LSTM/Gradient-Boosting to be benchmarked**
 
 ## 📊 Data Pipeline
 
@@ -39,13 +24,14 @@ This project simulates the role of an F1 race engineer by predicting lap times i
 - **Circuit Data**: Track characteristics and corner analysis
 - **Tyre Compounds**: Race-specific tyre hardness mappings
 
-### Feature Engineering
-1. **Temporal Features**: Lap number (normalized), tyre life
-2. **Weather Features**: Air/track temp, humidity, pressure, wind, rainfall
-3. **Position Features**: Gap to leader/ahead/behind (lagged by 1 lap)
-4. **Circuit Features**: Length, number of laps/turns, average corner angle
-5. **Status Features**: Track status one-hot encoding (green flag, yellow flag, etc.)
-6. **Categorical Embeddings**: Driver, Team, Tyre Compound, Mode
+### Feature Engineering (Some features may stay or remain depending on contribution)
+1. **Strategic**: push/conserve/manage state derived from normalized telemetry statistics
+2. **Temporal Features**: Lap number (normalized), tyre life
+3. **Weather Features**: Air/track temp, humidity, pressure, wind, rainfall
+4. **Position Features**: Gap to leader/ahead/behind (lagged by 1 lap)
+5. **Circuit Features**: Length, number of laps/turns, average corner angle
+6. **Status Features**: Track status one-hot encoding (green flag, yellow flag, etc.)
+7. **Categorical Embeddings**: Driver, Team, Tyre Compound
 
 ### Preprocessing
 - **Normalization Strategy**:
